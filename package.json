@@ -1,0 +1,37 @@
+{
+  "name": "airdrop-controller",
+  "version": "1.0.0",
+  "main": "app.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "asyncawait": "^1.0.6",
+    "body-parser": "^1.17.2",
+    "dotenv": "^5.0.1",
+    "ethereumjs-wallet": "^0.6.0",
+    "express": "^4.15.4",
+    "fs": "0.0.1-security",
+    "gh-pages": "^0.12.0",
+    "lite-server": "^2.3.0",
+    "mongodb": "^3.0.4",
+    "mongoose": "^5.0.10",
+    "mysql": "^2.15.0",
+    "path": "^0.12.7",
+    "solc": "^0.4.15",
+    "truffle-contract": "^1.1.11",
+    "truffle-hdwallet-provider": "0.0.3",
+    "web3-provider-engine": "^8.6.1",
+    "fast-csv": "^2.4.1",
+    "web3": "^1.0.0-beta.30",
+    "zeppelin-solidity": "^1.7.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "dev": "lite-server",
+    "start": "node script/app.js"
+  },
+  "author": "Brian",
+  "license": "ISC",
+  "description": ""
+}
