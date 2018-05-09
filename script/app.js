@@ -1,19 +1,34 @@
-let batchSize = require('../config').batchSize;
-let gasPrice = require('../config').gasPrice;
-let gasLimit = require('../config').gasLimit;
-let contractOwner = require('../config').owner;
-let contractAddress = require('../config').contractAddress;
-let csvFileName = require('../config').filename;
-
-let web3 = require('web3');
 let fs = require('fs');
 let csv = require('fast-csv');
-let AirdropController = artifacts.require('./AirdropController.sol');
-let numRunning = 0;
-let timeout = require('../config').timeout;
+let contract = require('truffle-contract');
+let Web3 = require('web3');
+let HDWalletProvider = require('truffle-hdwallet-provider');
+let dotenv = require('dotenv');
+dotenv.config();
 
+const AIRDROP_CONTROLLER = require('../build/contracts/AirdropController.json');
+const ropsten_infura_server = process.env.ROPSTEN_INFURA_SERVER;
+const rinkeby_infura_server = process.env.RINKEBY_INFURA_SERVER;
+const main_infura_server = process.env.MAINNET_INFURA_SERVER;
+const mnemonic = process.env.MNEMONIC;
+
+let batchSize = process.env.BATCH_SIZE;
+let gasPrice = process.env.GAS_PRICE;
+let gasLimit = process.env.GAS_LIMIT;
+let contractAddress = process.env.CONTRACT_ADDRESS;
+let csvFileName = 'data.csv';
+
+let timeout = process.env.TIME_OUT;
 // Calculate number of iterations to enforce timeout
 timeout = (timeout - 4) * 60 / 10;
+
+
+let provider = new HDWalletProvider(mnemonic, rinkeby_infura_server);  // change to main_infura_server
+let web3 = new Web3(provider);
+var owner = provider.address;
+
+const airdropController = contract(AIRDROP_CONTROLLER);
+airdropController.setProvider(provider);
 
 async function parseFile(airdropContractOwner, airdropContractAddress, filename) {
     let stream = fs.createReadStream("../data/" + filename);
@@ -21,15 +36,15 @@ async function parseFile(airdropContractOwner, airdropContractAddress, filename)
     let batch = 0;
     let failedAddresses = 0;
     let failedNumbers = 0;
-    let airdropperNumber = ++numRunning;
     let addresses = new Array();
     let tokenAmounts = new Array();
     let dynamic = false;
+    var airdropperInstance = null;
 
-    console.log(`+++++ Spinning up airdropper #${airdropperNumber} +++++`)
+    console.log(`+++++ Spinning up airdropper +++++`)
 
     try {
-        let airdropperInstance = await AirdropController.at(airdropContractAddress);
+        airdropperInstance = await airdropController.at(airdropContractAddress)
     } catch (err) {
         if (err == ReferenceError) {
             console.log('First run truffle migrate');
@@ -61,7 +76,7 @@ async function parseFile(airdropContractOwner, airdropContractAddress, filename)
             }
         })
         .on("end", async function () {
-            console.log(`Finished parsing file for airdropper #${airdropperNumber}`)
+            console.log(`Finished parsing file`)
             console.log(`Parsed ${addresses.length} addresses`)
             console.log(`Failed to parse ${failedAddresses} addresses`)
             console.log(`Failed to parse ${failedNumbers} token numbers`)
@@ -73,34 +88,39 @@ async function parseFile(airdropContractOwner, airdropContractAddress, filename)
             console.log(`================================================`)
 
             let batch = [];
+            let batchAmounts = [];
             let currentBatch = 0;
             let alreadyAllocated = 0;
 
             try {
-                for (let address of addresses) {
+                for (let index in addresses) {
+                    let address = addresses[index];
+                    let amount = tokenAmounts[index];
                     receivedTokens = await airdropperInstance.tokenReceived(address);
 
                     if (!receivedTokens) {
                         batch.push(address);
+                        batchAmounts.push(amount);
                     } else {
                         alreadyAllocated++;
                     }
 
-                    if (batch.length >= batchSize || currentBatch) {
+                    if (batch.length >= batchSize || index === addresses.length - 1) {
                         let batchesRemaining = (addresses.length - alreadyAllocated) / batchSize;
+                        console.log(batchesRemaining);
 
-                        console.log(`+ Airdropper #${airdropperNumber} allocating batch ${++currentBatch}/${parseInt(batchesRemaining)}`);
+                        console.log(`+ Airdropper allocating batch ${++currentBatch}/${parseInt(batchesRemaining)}`);
 
-                        res = await allocateTokens(airdropperInstance, airdropContractOwner, batch, tokenAmounts);
+                        res = await allocateTokens(airdropperInstance, owner, batch, batchAmounts);
 
                         if (!res) {
                             throw new Error('Transfer failed');
                         }
 
-                        console.log(`- Airdropper #${airdropperNumber} successfully allocated tokens to batch ${++currentBatch}/${parseInt(batchesRemaining)}`)
+                        console.log(`- Airdropper successfully allocated tokens to batch ${currentBatch}/${parseInt(batchesRemaining)}`)
 
                         batch = [];
-                        tokenAmounts = [];
+                        batchAmounts = [];
                     }
                 }
             } catch (err) {
@@ -115,7 +135,8 @@ async function allocateTokens(airdropper, owner, batch, tokenAmounts) {
     try {
         if (tokenAmounts.length > 0) {
             // Dynamic
-            es = await airdropper.airdrop(batch, tokenAmounts, { from: owner, gasPrice: gasPrice, gas: gasLimit });
+            console.log(batch);
+            es = await airdropper.airdrop(batch, tokenAmounts, { from: owner });
         }
         return true;
 
@@ -157,4 +178,4 @@ async function allocateTokens(airdropper, owner, batch, tokenAmounts) {
 // main command
 // warning: you should set token address before call this function
 // and send enough tokens to the contract
-parseFile(contractOwner, contractAddress, csvFileName);
+parseFile(owner, contractAddress, csvFileName);
